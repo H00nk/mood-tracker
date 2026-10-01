@@ -23,6 +23,11 @@ header h1 {
     margin: 0;
 }
 
+.layout {
+    display: grid;
+    gap: 1.5rem;
+}
+
 main {
     max-width: 900px;
     margin: 0 auto;
@@ -49,6 +54,12 @@ section:first-child label {
 
 section:first-child select {
     padding: 0.5rem;
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
 }
 
 .card {
@@ -87,3 +98,28 @@ footer {
 footer p {
     margin: 0.3rem 0;
 }
+
+@media (min-width: 600px) {
+    .cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .layout {
+        grid-template-columns: 3fr 1fr;
+        gap: 24px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    main {
+        max-width: none;
+    }
+
+    aside {
+        max-width: none;
+        margin: 0;
+    }
+}
+
