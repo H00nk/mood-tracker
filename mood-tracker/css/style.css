@@ -1,60 +1,161 @@
+/* ==========================================================================
+   Практична робота №5 - варіант 3: «Трекер настрою та емоцій»
+
+   ЧІТКА ВИМОГА: для кожного з 5 рівнів настрою - окремий колір із контрастом
+   >= 4.5:1 на фоні картки запису (#FFFFFF). Виміряно за формулою WCAG:
+     happy #7A5A12 - 6.37:1    good    #2F6B4F - 6.29:1
+     neutral #4F6272 - 6.32:1  sad     #4A5F8F - 6.32:1
+     angry #9A4A45 - 6.11:1
+
+   НЕЧІТКА ВИМОГА: «кольори мають відчуватися заспокійливими, а не тривожними».
+   Інтерпретація: усі п'ять кольорів мають низьку насиченість (≈20-45 %)
+   і середню-темну яскравість - це приглушені, «пастельно-землисті» відтінки
+   (гірчичний, шавлієвий, сіро-блакитний, індиго, теракотовий), а не чисті
+   яскраві жовтий/зелений/синій/червоний. Навіть «злий» - це теплий
+   теракотовий, а не сигнально-червоний, тож інтерфейс не лякає користувача,
+   який і так може почуватися погано. Колір не єдиний носій інформації:
+   поруч завжди стоїть словесна назва настрою. Картки округлені (16 px),
+   а великі світлі поверхні й відступи створюють «повітря».
+   ========================================================================== */
+
+:root {
+    /* нейтральні */
+    --bg-page: #fbf7f4;
+    --bg-surface: #ffffff;
+    --text: #3f3a45;
+    --text-muted: #6b6470;
+
+    /* основний / другорядний */
+    --primary: #5a4a72;
+    --primary-dark: #4a3b63;
+    --lavender: #e6dcf5;
+    --peach: #f8dfd2;
+    --peach-border: #e8c8b8;
+
+    /* 5 рівнів настрою: приглушені, контраст >= 4.5:1 на білому */
+    --mood-happy: #7a5a12;
+    --mood-good: #2f6b4f;
+    --mood-neutral: #4f6272;
+    --mood-sad: #4a5f8f;
+    --mood-angry: #9a4a45;
+
+    /* типографічна шкала: 14 / 16 / 20 / 28 */
+    --fs-small: 0.875rem;
+    --fs-base: 1rem;
+    --fs-h3: 1.25rem;
+    --fs-h2: 1.5rem;
+    --fs-h1: 1.75rem;
+
+    --font-head: Georgia, "Times New Roman", serif;
+    --font-body: Verdana, Arial, sans-serif;
+}
+
 * {
     box-sizing: border-box;
 }
 
 body {
-    font-family: Arial, sans-serif;
-    font-size: 1rem;
-    line-height: 1.5;
-    color: #4f4a55;
-    background-color: #fdf6f2;
+    font-family: var(--font-body);
+    font-size: var(--fs-base);
+    line-height: 1.55;
+    color: var(--text);
+    background-color: var(--bg-page);
     margin: 0;
 }
 
+h1, h2, h3 {
+    font-family: var(--font-head);
+    line-height: 1.25;
+}
+
 header {
-    background-color: #e6dcf5;
+    background-color: var(--lavender);
     text-align: center;
-    padding: 2rem;
+    padding: 2rem 1rem;
 }
 
 header h1 {
-    font-size: 2rem;
-    color: #66577a;
+    font-size: var(--fs-h1);
+    color: var(--primary-dark);
     margin: 0;
 }
 
 .layout {
     display: grid;
     gap: 1.5rem;
+    padding-top: 1.5rem;
 }
 
 main {
     max-width: 900px;
     margin: 0 auto;
     padding: 0 1rem;
+    width: 100%;
 }
 
 section {
-    background-color: #ffffff;
+    background-color: var(--bg-surface);
     padding: 1.5rem;
     margin-bottom: 1.5rem;
-    border-radius: 12px;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(63, 58, 69, 0.08);
 }
 
 section h2 {
-    color: #66577a;
-    margin-top: 0;
+    font-size: var(--fs-h2);
+    color: var(--primary);
+    margin: 0 0 1rem;
 }
 
+/* поле вибору настрою: label і select згруповані поруч (близькість) */
 section:first-child label {
     display: block;
-    padding: 1rem;
-    margin-bottom: 8px;
+    margin-bottom: 0.5rem;
 }
 
 section:first-child select {
-    padding: 0.5rem;
+    font-family: inherit;
+    font-size: var(--fs-base);
+    color: var(--text);
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--text-muted);
+    border-radius: 12px;
+    background-color: var(--bg-surface);
 }
+
+/* шкала настрою: колір + слово поруч */
+.mood-scale {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin: 1.25rem 0 0;
+    padding: 1rem 0 0;
+    border-top: 1px solid var(--lavender);
+    font-size: var(--fs-small);
+}
+
+.mood-scale__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text);
+}
+
+.swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background-color: var(--mood-color);
+}
+
+/* кожен клас задає змінну --mood-color для свого блоку */
+.mood--happy { --mood-color: var(--mood-happy); }
+.mood--good { --mood-color: var(--mood-good); }
+.mood--neutral { --mood-color: var(--mood-neutral); }
+.mood--sad { --mood-color: var(--mood-sad); }
+.mood--angry { --mood-color: var(--mood-angry); }
 
 .cards {
     display: grid;
@@ -63,36 +164,56 @@ section:first-child select {
 }
 
 .card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--lavender);
+    border-left: 6px solid var(--mood-color, var(--lavender));
     border-radius: 16px;
-    padding: 14px;
-    background-color: #e5f3eb;
-    margin-bottom: 12px;
+    padding: 1rem 1.25rem;
 }
 
 article h3 {
+    font-size: var(--fs-h3);
+    color: var(--primary-dark);
+    margin: 0 0 0.5rem;
+}
+
+.card p {
     margin: 0;
+}
+
+.mood-label {
+    color: var(--mood-color);
+    font-weight: 700;
 }
 
 aside {
     max-width: 900px;
     margin: 0 auto 2rem;
     padding: 1.5rem;
-    background-color: #f8dfd2;
-    border: 1px solid #e8c8b8;
-    border-radius: 12px;
+    background-color: var(--peach);
+    border: 1px solid var(--peach-border);
+    border-radius: 16px;
     text-align: center;
+    color: var(--text);
 }
 
 aside h2 {
-    margin-top: 0;
+    font-family: var(--font-head);
+    font-size: var(--fs-h2);
+    color: var(--primary-dark);
+    margin: 0 0 0.75rem;
+}
+
+aside p {
+    margin: 0.25rem 0;
 }
 
 footer {
-    background-color: #e6dcf5;
-    padding: 1.5rem;
+    background-color: var(--lavender);
+    padding: 1.5rem 1rem;
     text-align: center;
-    color: #756d78;
-    font-size: 0.875rem;
+    color: #5e5663;
+    font-size: var(--fs-small);
 }
 
 footer p {
@@ -106,6 +227,10 @@ footer p {
 }
 
 @media (min-width: 1024px) {
+    header h1 {
+        font-size: 2.25rem;
+    }
+
     .layout {
         grid-template-columns: 3fr 1fr;
         gap: 24px;
@@ -120,6 +245,6 @@ footer p {
     aside {
         max-width: none;
         margin: 0;
+        align-self: start;
     }
 }
-

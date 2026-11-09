@@ -7,7 +7,7 @@
 
     <title>Трекер настрою</title>
 
-    <link rel="stylesheet" href="css/style.css"> 
+    <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
@@ -38,6 +38,14 @@
                 <option value="angry">Злий</option>
 
     </select>
+
+            <ul class="mood-scale" aria-label="Шкала настрою">
+                <li class="mood-scale__item mood--happy"><span class="swatch" aria-hidden="true"></span>Щасливий</li>
+                <li class="mood-scale__item mood--good"><span class="swatch" aria-hidden="true"></span>Добрий</li>
+                <li class="mood-scale__item mood--neutral"><span class="swatch" aria-hidden="true"></span>Нейтральний</li>
+                <li class="mood-scale__item mood--sad"><span class="swatch" aria-hidden="true"></span>Сумний</li>
+                <li class="mood-scale__item mood--angry"><span class="swatch" aria-hidden="true"></span>Злий</li>
+            </ul>
         </section>
 
         <section>
@@ -45,19 +53,19 @@
 
         <div class="cards">
 
-            <article class="card">
+            <article class="card mood--sad">
                 <h3>Запис настрою - 3 вересня 2026</h3>
-                <p>Настрій: Сумний</p>
+                <p>Настрій: <span class="mood-label">Сумний</span></p>
             </article>
 
-            <article class="card">
+            <article class="card mood--happy">
                 <h3>Запис настрою - 17 вересня 2026</h3>
-                <p>Настрій: Щасливий</p>
+                <p>Настрій: <span class="mood-label">Щасливий</span></p>
             </article>
 
-            <article class="card">
+            <article class="card mood--neutral">
                 <h3>Запис настрою - 1 жовтня 2026</h3>
-                <p>Настрій: Нейтральний</p>
+                <p>Настрій: <span class="mood-label">Нейтральний</span></p>
             </article>
 
         </div>
@@ -69,7 +77,7 @@
     <aside>
         <h2>Підсумок</h2>
 
-        <p>Усього записів: 1</p>
+        <p>Усього записів: 3</p>
         <p>Найчастіший настрій: Щасливий</p>
     </aside>
 
