@@ -186,6 +186,22 @@ article h3 {
     font-weight: 700;
 }
 
+/* підпис настрою в картці, яку створює js/app.js (третій елемент після h3 і p) */
+.card .mood-label {
+    display: block;
+    margin-top: 0.5rem;
+}
+
+/* класи good / hard додає js/app.js за результатом moodToClass.
+   Дуже світлі відтінки: контраст тексту й підписів настрою лишається >= 5.5:1 */
+.card.good {
+    background-color: #f3f8f4;
+}
+
+.card.hard {
+    background-color: #fbf2ef;
+}
+
 aside {
     max-width: 900px;
     margin: 0 auto 2rem;
