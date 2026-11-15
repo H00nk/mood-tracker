@@ -2,15 +2,18 @@ console.log('script.js підключено');
  
 // Дані: масив записів настрою. mood - число від 1 до 5
 // (1 - злий, 2 - сумний, 3 - нейтральний, 4 - добрий, 5 - щасливий).
-// note - коротка примітка до запису.
+// note - коротка примітка до запису; id - унікальний номер (Vue потрібен для :key).
 const moodRecords = [
-    { date: '2026-09-03', mood: 2, note: 'Важкий день: багато пар і дедлайнів' },
-    { date: '2026-09-17', mood: 5, note: 'Гарний день: вдала презентація й прогулянка ввечері' },
-    { date: '2026-10-01', mood: 3, note: 'Звичайний день без особливих подій' }
+    { id: 1, date: '2026-09-03', mood: 2, note: 'Важкий день: багато пар і дедлайнів' },
+    { id: 2, date: '2026-09-17', mood: 5, note: 'Гарний день: вдала презентація й прогулянка ввечері' },
+    { id: 3, date: '2026-10-01', mood: 3, note: 'Звичайний день без особливих подій' }
 ];
 
-// Контейнер історії записів і елемент підсумку.
-const listContainer = document.querySelector('#mood-history');
+// Кореневий екземпляр Vue (створюється в блоці практичної №10 нижче).
+// Поки Vue не завантажився, лишається null.
+let moodApp = null;
+
+// Елементи підсумку (історію записів тепер виводить Vue).
 const avgMoodElement = document.querySelector('#avg-mood');
 const totalCountElement = document.querySelector('#records-count');
 
@@ -28,9 +31,9 @@ const noteInput = document.querySelector('#note');
 const noteCounter = document.querySelector('#note-counter');
 const moodError = document.querySelector('#mood-error');
 
-// Прибираємо статичні картки-заглушки з практикуму 2: вони лишаються
-// в index.html як орієнтир структури, але на сторінці їх заміняє динамічний список.
-document.querySelectorAll('#mood-history .card').forEach(card => card.remove());
+// Статичні картки-заглушки з практикуму 2 лишаються в index.html як запасний варіант
+// (їх видно, якщо Vue не завантажився). Раніше їх видаляв card.remove(); тепер це зайве,
+// бо Vue під час mount() сам очищає контейнер #mood-history і малює список компонентами.
  
 // Назви рівнів настрою; індекс у масиві = mood - 1.
 const MOOD_LABELS = ['Злий', 'Сумний', 'Нейтральний', 'Добрий', 'Щасливий'];
@@ -72,13 +75,12 @@ function classifyPeriod(average) {
     }
 }
  
-// Рендер списку: очищає контейнер (за замовчуванням - історія записів) і для кожного
-// запису створює картку <article> із заголовком (h3) та приміткою (p).
-// Запис свого застосунку {date, mood, note}: заголовок - дата, додатково підпис настрою
-// (span), атрибут data-mood та класи mood--* і good/hard (за moodToClass).
-// Запис з API {title, note, email}: заголовок береться з title, настрою немає,
-// тому додається лише рядок з email. Так одна функція обслуговує обидва списки.
-function renderMoodHistory(records, container = listContainer) {
+// Рендер списку для секції «Записи з сервера» (практична 9): очищає контейнер і для
+// кожного запису {title, note, email} створює картку <article> із заголовком (h3),
+// приміткою (p) та рядком з email. Історію власних записів (#mood-history) раніше
+// виводила ця ж функція (гілка для {date, mood, note}), але в практичній №10 її замінив
+// Vue-компонент MoodEntry, тому ручний DOM-код для цієї ділянки видалено.
+function renderMoodHistory(records, container) {
     container.innerHTML = '';
 
     for (const record of records) {
@@ -86,22 +88,12 @@ function renderMoodHistory(records, container = listContainer) {
         card.classList.add('card');
 
         const title = document.createElement('h3');
-        title.textContent = record.title ?? formatDate(record.date);
+        title.textContent = record.title;
 
         const note = document.createElement('p');
         note.textContent = record.note;
 
         card.append(title, note);
-
-        if (record.mood !== undefined) {
-            card.classList.add(`mood--${MOOD_KEYS[record.mood - 1]}`, moodToClass(record.mood));
-            card.dataset.mood = record.mood;
-
-            const label = document.createElement('span');
-            label.classList.add('mood-label');
-            label.textContent = moodToLabel(record.mood);
-            card.append(label);
-        }
 
         if (record.email) {
             const meta = document.createElement('span');
@@ -164,13 +156,16 @@ form.addEventListener('submit', event => {
     event.preventDefault();   // без цього сторінка перезавантажилась би
 
     const newRecord = {
+        id: Math.max(0, ...moodRecords.map(record => record.id)) + 1,   // унікальний id
         date: dateInput.value,
         mood: Number(moodInput.value),   // value з number-поля - рядок
         note: noteInput.value.trim()
     };
 
-    moodRecords.push(newRecord);
-    renderMoodHistory(moodRecords);
+    // Додаємо запис через реактивний масив moodApp.records: Vue сам перемалює список,
+    // жодного ручного рендеру. Той самий масив читає й підсумок (moodRecords).
+    // Якщо Vue не завантажився, просто додаємо в звичайний масив.
+    (moodApp ? moodApp.records : moodRecords).push(newRecord);
     updateAverageMood(moodRecords);
     updateTotalCount(moodRecords);
 
@@ -179,10 +174,61 @@ form.addEventListener('submit', event => {
     updateNoteCounter();
 });
 
-renderMoodHistory(moodRecords);
 updateAverageMood(moodRecords);
 updateTotalCount(moodRecords);
 updateNoteCounter();
+
+// ---------------------------------------------------------------------------
+// Практична №10: бібліотеки та фреймворки. Варіант 3: компонент MoodEntry.
+// Обрано Vue 3 (глобальна збірка з CDN): шаблон компонента - звичайний рядок, тому не
+// потрібні ні збірка, ні Babel (для React довелося б підключати Babel standalone), а
+// скрипт працює навіть при відкритті index.html як файлу.
+// ---------------------------------------------------------------------------
+
+// Емодзі за рівнем настрою; індекс = mood - 1.
+const MOOD_EMOJIS = ['😠', '😢', '😐', '🙂', '😄'];
+
+// Компонент одного запису. Отримує дані лише через props (date, mood, note).
+// Емодзі - похідне (computed) значення: воно обчислюється зі значення props.mood,
+// автоматично змінюється разом із ним і ніде не зберігається окремо.
+const MoodEntry = {
+    props: {
+        date: String,
+        mood: Number,
+        note: String
+    },
+    computed: {
+        emoji() { return MOOD_EMOJIS[this.mood - 1] ?? '❔'; },
+        label() { return moodToLabel(this.mood); },
+        moodKey() { return MOOD_KEYS[this.mood - 1]; },
+        levelClass() { return moodToClass(this.mood); },
+        formattedDate() { return formatDate(this.date); }
+    },
+    template: `
+        <article class="card" :class="['mood--' + moodKey, levelClass]" :data-mood="mood">
+            <h3>{{ formattedDate }}</h3>
+            <p>{{ note }}</p>
+            <span class="mood-label"><span class="mood-emoji" aria-hidden="true">{{ emoji }}</span> {{ label }}</span>
+        </article>`
+};
+
+if (typeof Vue !== 'undefined') {
+    // mount() повертає кореневий екземпляр: через нього форма додає записи в records.
+    moodApp = Vue.createApp({
+        components: { MoodEntry },
+        data() {
+            // records - той самий масив moodRecords, який Vue обгортає в реактивний проксі:
+            // зміни через moodApp.records.push(...) відстежуються й перемальовують список.
+            return { records: moodRecords };
+        },
+        // v-for створює по одному компоненту на запис; :key прив'язує вузол до унікального id.
+        template: `
+            <mood-entry v-for="record in records" :key="record.id"
+                        :date="record.date" :mood="record.mood" :note="record.note"></mood-entry>`
+    }).mount('#mood-history');
+} else {
+    console.error('Vue не завантажився (перевірте з\'єднання з unpkg.com): історія записів показує статичні картки.');
+}
 
 // ---------------------------------------------------------------------------
 // Практична №9: клієнт для API (fetch). Варіант 3: тестові дані JSONPlaceholder.

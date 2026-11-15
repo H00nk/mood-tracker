@@ -365,3 +365,8 @@ footer p {
         align-self: start;
     }
 }
+
+/* емодзі настрою перед назвою рівня (обчислюється в компоненті MoodEntry) */
+.mood-emoji {
+    margin-right: 0.25rem;
+}
