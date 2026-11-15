@@ -113,15 +113,73 @@ section:first-child label {
     margin-bottom: 0.5rem;
 }
 
-section:first-child select {
+/* форма додавання запису: кожне поле - окрема група label + input + підказка */
+.field {
+    margin-bottom: 1rem;
+}
+
+.field input {
     font-family: inherit;
     font-size: var(--fs-base);
     color: var(--text);
+    width: 100%;
+    max-width: 28rem;
     min-height: 44px;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--text-muted);
     border-radius: 12px;
     background-color: var(--bg-surface);
+}
+
+.field input:focus-visible,
+button:focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* поле з помилкою валідації: атрибут aria-invalid ставить js/app.js */
+.field input[aria-invalid="true"] {
+    border: 2px solid #9a4a45;
+}
+
+/* повідомлення про помилку (#8a3a36 на білому - 7.7:1) */
+.field-error {
+    margin: 0.4rem 0 0;
+    font-size: var(--fs-small);
+    color: #8a3a36;
+}
+
+/* порожній абзац помилки не займає місця */
+.field-error:empty {
+    display: none;
+}
+
+/* лічильник символів (#6b6470 на білому - 5.7:1); біля ліміту стає акцентним */
+.field-hint {
+    margin: 0.4rem 0 0;
+    font-size: var(--fs-small);
+    color: var(--text-muted);
+}
+
+.field-hint.near-limit {
+    color: #8a3a36;
+    font-weight: 700;
+}
+
+button[type="submit"] {
+    font-family: inherit;
+    font-size: var(--fs-base);
+    min-height: 44px;
+    padding: 0.5rem 1.5rem;
+    color: #ffffff;
+    background-color: var(--primary);
+    border: 0;
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+button[type="submit"]:hover {
+    background-color: var(--primary-dark);
 }
 
 /* шкала настрою: колір + слово поруч */

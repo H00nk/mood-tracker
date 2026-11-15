@@ -24,28 +24,35 @@
         <section>
             <h2>Відмітити настрій</h2>
 
-            <label for="mood">Оберіть свій настрій:</label>
+            <form id="mood-form">
+                <div class="field">
+                    <label for="date">Дата:</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
 
-            <select id="mood" name="mood">
+                <div class="field">
+                    <label for="mood">Настрій (число від 1 до 5):</label>
+                    <input type="number" id="mood" name="mood" min="1" max="5" step="1" required
+                           aria-describedby="mood-error">
+                    <p class="field-error" id="mood-error" aria-live="polite"></p>
+                </div>
 
-                <option value="happy">Щасливий</option>
+                <div class="field">
+                    <label for="note">Примітка:</label>
+                    <input type="text" id="note" name="note" maxlength="200"
+                           aria-describedby="note-counter">
+                    <p class="field-hint" id="note-counter">Залишилось символів: 200</p>
+                </div>
 
-                <option value="good">Добрий</option>
-
-                <option value="neutral">Нейтральний</option>
-
-                <option value="sad">Сумний</option>
-
-                <option value="angry">Злий</option>
-
-    </select>
+                <button type="submit">Додати запис</button>
+            </form>
 
             <ul class="mood-scale" aria-label="Шкала настрою">
-                <li class="mood-scale__item mood--happy"><span class="swatch" aria-hidden="true"></span>Щасливий</li>
-                <li class="mood-scale__item mood--good"><span class="swatch" aria-hidden="true"></span>Добрий</li>
-                <li class="mood-scale__item mood--neutral"><span class="swatch" aria-hidden="true"></span>Нейтральний</li>
-                <li class="mood-scale__item mood--sad"><span class="swatch" aria-hidden="true"></span>Сумний</li>
-                <li class="mood-scale__item mood--angry"><span class="swatch" aria-hidden="true"></span>Злий</li>
+                <li class="mood-scale__item mood--happy"><span class="swatch" aria-hidden="true"></span>5 - Щасливий</li>
+                <li class="mood-scale__item mood--good"><span class="swatch" aria-hidden="true"></span>4 - Добрий</li>
+                <li class="mood-scale__item mood--neutral"><span class="swatch" aria-hidden="true"></span>3 - Нейтральний</li>
+                <li class="mood-scale__item mood--sad"><span class="swatch" aria-hidden="true"></span>2 - Сумний</li>
+                <li class="mood-scale__item mood--angry"><span class="swatch" aria-hidden="true"></span>1 - Злий</li>
             </ul>
         </section>
 
@@ -78,7 +85,7 @@
     <aside>
         <h2>Підсумок</h2>
 
-        <p>Усього записів: 3</p>
+        <p id="records-count">Усього записів: 3</p>
         <p id="avg-mood">Середній настрій: -</p>
     </aside>
 
