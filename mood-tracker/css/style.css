@@ -166,7 +166,8 @@ button:focus-visible {
     font-weight: 700;
 }
 
-button[type="submit"] {
+button[type="submit"],
+#refresh-btn {
     font-family: inherit;
     font-size: var(--fs-base);
     min-height: 44px;
@@ -178,8 +179,50 @@ button[type="submit"] {
     cursor: pointer;
 }
 
-button[type="submit"]:hover {
+button[type="submit"]:hover,
+#refresh-btn:hover:not(:disabled) {
     background-color: var(--primary-dark);
+}
+
+/* під час завантаження кнопка заблокована (disabled ставить js/app.js) */
+#refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* секція «Записи з сервера» */
+.section-hint {
+    margin: 0 0 1rem;
+    font-size: var(--fs-small);
+    color: var(--text-muted);
+}
+
+#refresh-btn {
+    margin-bottom: 1rem;
+}
+
+/* стан завантаження (#6b6470 на білому - 5.7:1) */
+.api-status {
+    margin: 0 0 1rem;
+    color: var(--text-muted);
+}
+
+/* повідомлення про помилку: #8a3a36 на #fbf2ef - 6.9:1 */
+.api-error {
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    color: #8a3a36;
+    background-color: #fbf2ef;
+    border: 1px solid #9a4a45;
+    border-radius: 12px;
+}
+
+/* додатковий рядок у картці (email автора) */
+.card-meta {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: var(--fs-small);
+    color: var(--text-muted);
 }
 
 /* шкала настрою: колір + слово поруч */

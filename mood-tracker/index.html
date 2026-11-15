@@ -80,6 +80,19 @@
 
         </section>
 
+        <section>
+            <h2>Записи з сервера</h2>
+
+            <p class="section-hint">Тестові дані JSONPlaceholder: name - заголовок запису, body - текст нотатки.</p>
+
+            <button type="button" id="refresh-btn">Оновити</button>
+
+            <p class="api-status" id="api-status" role="status" hidden>Завантаження…</p>
+            <p class="api-error" id="api-error" role="alert" hidden></p>
+
+            <div class="cards" id="api-list" aria-live="polite"></div>
+        </section>
+
     </main>
 
     <aside>

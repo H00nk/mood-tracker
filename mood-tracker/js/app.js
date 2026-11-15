@@ -14,6 +14,12 @@ const listContainer = document.querySelector('#mood-history');
 const avgMoodElement = document.querySelector('#avg-mood');
 const totalCountElement = document.querySelector('#records-count');
 
+// Секція «Записи з сервера»: список, кнопка «Оновити» та елементи стану.
+const apiList = document.querySelector('#api-list');
+const refreshButton = document.querySelector('#refresh-btn');
+const apiStatus = document.querySelector('#api-status');
+const apiError = document.querySelector('#api-error');
+
 // Форма додавання запису та її елементи.
 const form = document.querySelector('#mood-form');
 const dateInput = document.querySelector('#date');
@@ -66,29 +72,45 @@ function classifyPeriod(average) {
     }
 }
  
-// Рендер історії: очищає контейнер і для кожного запису створює картку <article>
-// із заголовком-датою (h3), приміткою (p) і підписом настрою (span). Картка отримує
-// атрибут data-mood та класи: mood--* (колір рівня) і good/hard (за moodToClass).
-function renderMoodHistory(records) {
-    listContainer.innerHTML = '';
+// Рендер списку: очищає контейнер (за замовчуванням - історія записів) і для кожного
+// запису створює картку <article> із заголовком (h3) та приміткою (p).
+// Запис свого застосунку {date, mood, note}: заголовок - дата, додатково підпис настрою
+// (span), атрибут data-mood та класи mood--* і good/hard (за moodToClass).
+// Запис з API {title, note, email}: заголовок береться з title, настрою немає,
+// тому додається лише рядок з email. Так одна функція обслуговує обидва списки.
+function renderMoodHistory(records, container = listContainer) {
+    container.innerHTML = '';
 
     for (const record of records) {
         const card = document.createElement('article');
-        card.classList.add('card', `mood--${MOOD_KEYS[record.mood - 1]}`, moodToClass(record.mood));
-        card.dataset.mood = record.mood;
+        card.classList.add('card');
 
         const title = document.createElement('h3');
-        title.textContent = formatDate(record.date);
+        title.textContent = record.title ?? formatDate(record.date);
 
         const note = document.createElement('p');
         note.textContent = record.note;
 
-        const label = document.createElement('span');
-        label.classList.add('mood-label');
-        label.textContent = moodToLabel(record.mood);
+        card.append(title, note);
 
-        card.append(title, note, label);
-        listContainer.append(card);   // додаємо кожну картку всередині циклу
+        if (record.mood !== undefined) {
+            card.classList.add(`mood--${MOOD_KEYS[record.mood - 1]}`, moodToClass(record.mood));
+            card.dataset.mood = record.mood;
+
+            const label = document.createElement('span');
+            label.classList.add('mood-label');
+            label.textContent = moodToLabel(record.mood);
+            card.append(label);
+        }
+
+        if (record.email) {
+            const meta = document.createElement('span');
+            meta.classList.add('card-meta');
+            meta.textContent = record.email;
+            card.append(meta);
+        }
+
+        container.append(card);   // додаємо кожну картку всередині циклу
     }
 }
 
@@ -162,6 +184,69 @@ updateAverageMood(moodRecords);
 updateTotalCount(moodRecords);
 updateNoteCounter();
 
+// ---------------------------------------------------------------------------
+// Практична №9: клієнт для API (fetch). Варіант 3: тестові дані JSONPlaceholder.
+// ---------------------------------------------------------------------------
+
+// Публічний безкоштовний API без ключа: https://jsonplaceholder.typicode.com
+// Відповідь - масив коментарів [{postId, id, name, email, body}], які трактуємо
+// як записи настрою: name - заголовок запису, body - текст нотатки.
+const API_URL = 'https://jsonplaceholder.typicode.com/comments?postId=1';
+
+// Повідомлення для користувача (технічний текст помилки йде лише в консоль).
+const API_ERROR_MESSAGE = 'Записи тимчасово недоступні';
+
+// Адаптує поля відповіді API до формату, який приймає renderMoodHistory.
+const commentToRecord = comment => ({
+    title: comment.name,
+    note: comment.body,
+    email: comment.email
+});
+
+// Стан завантаження: показує текст «Завантаження…» і блокує кнопку «Оновити».
+function showLoading(isLoading) {
+    apiStatus.hidden = !isLoading;
+    refreshButton.disabled = isLoading;
+    apiList.setAttribute('aria-busy', String(isLoading));
+}
+
+// Показує повідомлення про помилку в окремому елементі; порожній рядок його ховає.
+function showError(message) {
+    apiError.textContent = message;
+    apiError.hidden = message === '';
+}
+
+// Запит до API: https://jsonplaceholder.typicode.com/comments?postId=1
+// 1) вмикає індикатор завантаження; 2) fetch і очікування відповіді; 3) перевірка
+// response.ok (fetch не вважає 404/500 помилкою, тому кидаємо виняток вручну);
+// 4) розбір JSON і рендер списку; 5) у catch - зрозуміле повідомлення на сторінці
+// й деталі для розробника в console.error; 6) у finally індикатор вимикається
+// незалежно від результату.
+async function loadData() {
+    showLoading(true);
+    showError('');
+    try {
+        const response = await fetch(API_URL);
+        if (!response.ok) {
+            throw new Error(`Сервер відповів кодом ${response.status}`);
+        }
+        const data = await response.json();
+        console.log(data);   // перевірка структури відповіді (крок 5)
+        renderMoodHistory(data.map(commentToRecord), apiList);
+    } catch (error) {
+        apiList.innerHTML = '';   // не показуємо застарілі записи поруч із помилкою
+        showError(API_ERROR_MESSAGE);
+        console.error(error);
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Кнопка «Оновити» повторює запит без перезавантаження сторінки.
+refreshButton.addEventListener('click', loadData);
+
+loadData();   // перше завантаження списку при відкритті сторінки
+
 // Виводимо кожен запис: дата і назва настрою.
 for (const record of moodRecords) {
     console.log(record.date, '-', moodToLabel(record.mood));
@@ -171,4 +256,3 @@ const averageMood = calcAverageMood(moodRecords);
 console.log(`Усього записів: ${moodRecords.length}`);
 console.log(`Середній настрій: ${averageMood.toFixed(2)} (${moodToLabel(Math.round(averageMood))})`);
 console.log(`Підсумок: ${classifyPeriod(averageMood)}`);
- 
