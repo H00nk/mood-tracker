@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="css/style.css">
     <!-- Vue 3, глобальна збірка з CDN (практична 10); має стояти перед js/app.js -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js" defer></script>
-    <script src="js/app.js" defer></script>
+    <script src="js/app.stage1-localstorage.js" defer></script>
 </head>
 
 <body>
@@ -60,6 +60,9 @@
 
         <section>
             <h2>Історія записів</h2>
+
+            <p class="storage-error" id="storage-error" role="alert" hidden></p>
+            <p class="empty-state" id="empty-state" hidden>Записів ще немає. Додайте перший запис за формою вище.</p>
 
         <div class="cards" id="mood-history">
 

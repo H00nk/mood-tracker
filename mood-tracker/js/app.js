@@ -2,8 +2,15 @@ console.log('script.js підключено');
  
 // Дані: масив записів настрою. mood - число від 1 до 5
 // (1 - злий, 2 - сумний, 3 - нейтральний, 4 - добрий, 5 - щасливий).
-// note - коротка примітка до запису; id - унікальний номер (Vue потрібен для :key).
-const moodRecords = [
+// note - коротка примітка до запису; id - унікальний номер, який видає IndexedDB
+// (autoIncrement); потім він потрібен Vue для :key.
+// Джерело даних - IndexedDB (практична №11): цей масив лише відображає вміст бази
+// і заповнюється функцією refreshList() після кожної операції з нею.
+const moodRecords = [];
+
+// Демонстраційні записи: показуються лише тоді, коли IndexedDB недоступна
+// (наприклад, у приватному режимі), щоб застосунок лишався робочим.
+const DEMO_RECORDS = [
     { id: 1, date: '2026-09-03', mood: 2, note: 'Важкий день: багато пар і дедлайнів' },
     { id: 2, date: '2026-09-17', mood: 5, note: 'Гарний день: вдала презентація й прогулянка ввечері' },
     { id: 3, date: '2026-10-01', mood: 3, note: 'Звичайний день без особливих подій' }
@@ -30,6 +37,10 @@ const moodInput = document.querySelector('#mood');
 const noteInput = document.querySelector('#note');
 const noteCounter = document.querySelector('#note-counter');
 const moodError = document.querySelector('#mood-error');
+
+// Повідомлення про помилку сховища та підказка «записів ще немає» (секція «Історія записів»).
+const storageError = document.querySelector('#storage-error');
+const emptyState = document.querySelector('#empty-state');
 
 // Статичні картки-заглушки з практикуму 2 лишаються в index.html як запасний варіант
 // (їх видно, якщо Vue не завантажився). Раніше їх видаляв card.remove(); тепер це зайве,
@@ -108,6 +119,10 @@ function renderMoodHistory(records, container) {
 
 // Оновлює вже наявний елемент p#avg-mood: середній настрій за всіма записами.
 function updateAverageMood(records) {
+    if (records.length === 0) {
+        avgMoodElement.textContent = 'Середній настрій: -';
+        return;
+    }
     const average = calcAverageMood(records);
     avgMoodElement.textContent = `Середній настрій: ${average.toFixed(2)} (${moodToLabel(Math.round(average))})`;
 }
@@ -152,30 +167,44 @@ noteInput.addEventListener('input', updateNoteCounter);
 // Подія submit: додає новий запис без перезавантаження сторінки.
 // Якщо поле не пройшло валідацію (required, min/max, setCustomValidity), браузер сам
 // блокує надсилання й показує повідомлення, тому сюди потрапляють лише коректні дані.
-form.addEventListener('submit', event => {
+// Запис спочатку потрапляє в IndexedDB (async), а список і підсумок оновлюються вже
+// з бази: так на екрані завжди те, що справді збережено.
+form.addEventListener('submit', async event => {
     event.preventDefault();   // без цього сторінка перезавантажилась би
 
     const newRecord = {
-        id: Math.max(0, ...moodRecords.map(record => record.id)) + 1,   // унікальний id
         date: dateInput.value,
         mood: Number(moodInput.value),   // value з number-поля - рядок
         note: noteInput.value.trim()
+        // id не вказуємо: його видає база (autoIncrement)
     };
 
-    // Додаємо запис через реактивний масив moodApp.records: Vue сам перемалює список,
-    // жодного ручного рендеру. Той самий масив читає й підсумок (moodRecords).
-    // Якщо Vue не завантажився, просто додаємо в звичайний масив.
-    (moodApp ? moodApp.records : moodRecords).push(newRecord);
-    updateAverageMood(moodRecords);
-    updateTotalCount(moodRecords);
+    await storageReady;   // чекаємо, поки завершиться відкриття бази й міграція
+
+    if (dbAvailable) {
+        try {
+            await addItem(newRecord);
+            await refreshList();
+            showStorageError('');
+        } catch (error) {
+            console.error(error);
+            showStorageError('Не вдалося зберегти запис у локальну базу даних. Спробуйте ще раз.');
+            return;   // введені дані лишаються у формі
+        }
+    } else {
+        // Режим без бази: запис живе лише в пам'яті сторінки до перезавантаження.
+        newRecord.id = Math.max(0, ...moodRecords.map(record => record.id)) + 1;
+        (moodApp ? moodApp.records : moodRecords).push(newRecord);
+        updateAverageMood(moodRecords);
+        updateTotalCount(moodRecords);
+        updateEmptyState();
+    }
 
     form.reset();           // reset не викликає подій input, тому оновлюємо стан вручну
     validateMood();
     updateNoteCounter();
 });
 
-updateAverageMood(moodRecords);
-updateTotalCount(moodRecords);
 updateNoteCounter();
 
 // ---------------------------------------------------------------------------
@@ -229,6 +258,248 @@ if (typeof Vue !== 'undefined') {
 } else {
     console.error('Vue не завантажився (перевірте з\'єднання з unpkg.com): історія записів показує статичні картки.');
 }
+
+// ---------------------------------------------------------------------------
+// Практична №11: локальні сховища даних. Варіант 3: IndexedDB, база MoodDB, сховище
+// "moodEntries" з keyPath "id" та autoIncrement: true (id видає сама база).
+// Етап 1 (localStorage) замінено на IndexedDB; раніше збережені записи переносить міграція.
+// ---------------------------------------------------------------------------
+
+const DB_NAME = 'MoodDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'moodEntries';
+
+// localStorage після переходу на IndexedDB потрібен лише для міграції:
+// LEGACY_KEY - старий список записів з етапу 1, MIGRATED_KEY - прапорець «вже перенесено».
+const LEGACY_KEY = 'moodRecords';
+const MIGRATED_KEY = 'migrated';
+
+// Запис має вигляд {id, date, mood, note}. Дані в сховищі може змінити хто завгодно
+// (DevTools, стара версія застосунку), тому форму кожного елемента перевіряємо.
+function isValidRecord(record) {
+    return record !== null && typeof record === 'object'
+        && (record.id === undefined || Number.isInteger(record.id))
+        && typeof record.date === 'string'
+        && Number.isInteger(record.mood) && record.mood >= 1 && record.mood <= 5
+        && typeof record.note === 'string';
+}
+
+// Читає масив записів. JSON.parse кидає виняток на пошкодженому рядку, тому виклик
+// обгорнуто в try/catch: при помилці застосунок просто починає з порожнього списку.
+function loadFromLocalStorage() {
+    try {
+        const raw = localStorage.getItem(LEGACY_KEY);
+        const data = raw ? JSON.parse(raw) : [];
+        return Array.isArray(data) ? data.filter(isValidRecord) : [];
+    } catch (error) {
+        console.error('Пошкоджені дані в localStorage:', error);
+        return [];
+    }
+}
+
+// З'єднання з базою відкривається один раз і використовується повторно (dbPromise);
+// якщо відкриття не вдалося, наступний виклик спробує ще раз.
+let dbPromise = null;
+
+// Відкриває базу MoodDB і повертає Promise з об'єктом бази. onupgradeneeded спрацьовує
+// лише тоді, коли бази ще немає або її версія нижча за DB_VERSION - тільки тут створюється
+// сховище; перевірка contains() не дає створити його вдруге. Помилку відкриття (IndexedDB
+// вимкнена, приватний режим) перехоплює той, хто викликає openDB().
+function openDB() {
+    if (dbPromise) {
+        return dbPromise;
+    }
+    dbPromise = new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+            reject(new Error('IndexedDB недоступна в цьому браузері'));
+            return;
+        }
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onupgradeneeded = event => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            }
+        };
+
+        request.onsuccess = () => {
+            const db = request.result;
+            // Інша вкладка оновлює версію бази: закриваємо з'єднання, щоб не блокувати її.
+            db.onversionchange = () => {
+                db.close();
+                dbPromise = null;
+            };
+            resolve(db);
+        };
+        request.onerror = () => reject(request.error);
+    });
+    dbPromise.catch(() => { dbPromise = null; });
+    return dbPromise;
+}
+
+// Додає запис і повертає його id. put() працює і для нового запису, і для наявного (за
+// тим самим id), тому зручніший за add(), який кидає помилку при дублюванні ключа.
+// Запис без поля id отримує наступне число від генератора (autoIncrement).
+// Операція виконується в транзакції readwrite: якщо вона провалиться, зміни не застосуються.
+async function addItem(item) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const request = tx.objectStore(STORE_NAME).put(item);
+        tx.oncomplete = () => resolve(request.result);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+    });
+}
+
+// Оновлює наявний запис: повний об'єкт із тим самим id замінює старий, дубліката не буде.
+async function updateItem(item) {
+    if (!Number.isInteger(item.id)) {
+        throw new Error('updateItem: для оновлення потрібен id запису');
+    }
+    return addItem(item);
+}
+
+// Додає кілька записів в одній транзакції: або збережуться всі, або жоден. Потрібна міграції,
+// щоб збій посередині не залишив базу з половиною даних.
+async function addItems(items) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        try {
+            items.forEach(item => store.put(item));
+        } catch (error) {
+            tx.abort();   // виняток у JS сам транзакцію не скасовує
+            reject(error);
+            return;
+        }
+        tx.oncomplete = () => resolve(items.length);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+    });
+}
+
+// Повертає всі записи (масив у порядку зростання id). Транзакція readonly: тільки читання.
+async function getAllItems() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const request = tx.objectStore(STORE_NAME).getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Видаляє запис за id (транзакція readwrite).
+async function deleteItem(id) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+    });
+}
+
+// Одноразова міграція з localStorage. Виконується лише поки прапорець migrated не стоїть:
+// якщо сховище порожнє, а в localStorage є записи, вони переносяться в IndexedDB (в одній
+// транзакції). Прапорець ставиться в будь-якому разі, тож при наступних запусках міграція
+// не повторюється й не дублює записи. Старий список у localStorage не видаляється.
+// Повертає кількість перенесених записів.
+async function migrateFromLocalStorage() {
+    try {
+        if (localStorage.getItem(MIGRATED_KEY) === 'true') {
+            return 0;
+        }
+    } catch (error) {
+        return 0;   // localStorage недоступний - переносити нема з чого
+    }
+
+    const existing = await getAllItems();
+    const legacy = loadFromLocalStorage();
+    let moved = 0;
+    if (existing.length === 0 && legacy.length > 0) {
+        moved = await addItems(legacy);
+    }
+
+    try {
+        localStorage.setItem(MIGRATED_KEY, 'true');
+    } catch (error) {
+        console.error('Не вдалося позначити міграцію виконаною:', error);
+    }
+    return moved;
+}
+
+// Показує повідомлення про помилку сховища над списком; порожній рядок його ховає.
+function showStorageError(message) {
+    storageError.textContent = message;
+    storageError.hidden = message === '';
+}
+
+// Підказка «записів ще немає» видна лише тоді, коли список порожній.
+function updateEmptyState() {
+    emptyState.hidden = moodRecords.length > 0;
+}
+
+// Перечитує всі записи з IndexedDB і кладе їх у реактивний масив: Vue сам перемальовує
+// список, а підсумок оновлюється з тих самих даних. Викликається після кожної операції.
+async function refreshList() {
+    const items = await getAllItems();
+    const records = moodApp ? moodApp.records : moodRecords;   // через проксі Vue, щоб спрацювала реактивність
+    records.splice(0, records.length, ...items);
+    updateAverageMood(moodRecords);
+    updateTotalCount(moodRecords);
+    updateEmptyState();
+}
+
+// Підсумок у консоль (практична №6): викликається один раз, коли дані завантажено.
+function logSummary(records) {
+    if (records.length === 0) {
+        console.log('Записів ще немає');
+        return;
+    }
+    for (const record of records) {
+        console.log(record.date, '-', moodToLabel(record.mood));
+    }
+    const averageMood = calcAverageMood(records);
+    console.log(`Усього записів: ${records.length}`);
+    console.log(`Середній настрій: ${averageMood.toFixed(2)} (${moodToLabel(Math.round(averageMood))})`);
+    console.log(`Підсумок: ${classifyPeriod(averageMood)}`);
+}
+
+// true, якщо база відкрилася й дані з неї прочитано; інакше застосунок працює лише в пам'яті.
+let dbAvailable = false;
+
+// Запуск сховища: відкрити базу, виконати міграцію, показати збережені записи. Помилка
+// відкриття (IndexedDB вимкнена чи недоступна) не ламає сторінку: користувач бачить
+// зрозуміле повідомлення, а застосунок лишається робочим із демонстраційними записами.
+async function initStorage() {
+    try {
+        await openDB();
+        const moved = await migrateFromLocalStorage();
+        await refreshList();
+        dbAvailable = true;
+        if (moved > 0) {
+            console.log(`Міграція: з localStorage перенесено записів - ${moved}`);
+        }
+    } catch (error) {
+        console.error('IndexedDB недоступна:', error);
+        showStorageError('Не вдалося відкрити локальну базу даних. Можливо, браузер блокує IndexedDB '
+            + '(наприклад, у приватному режимі перегляду). Записи працюватимуть лише до перезавантаження сторінки.');
+        const records = moodApp ? moodApp.records : moodRecords;
+        records.splice(0, records.length, ...DEMO_RECORDS);
+        updateAverageMood(moodRecords);
+        updateTotalCount(moodRecords);
+        updateEmptyState();
+    }
+    logSummary(moodRecords);
+}
+
+// Promise завершення запуску: submit чекає на нього, щоб не додати запис раніше за відкриття бази.
+const storageReady = initStorage();
 
 // ---------------------------------------------------------------------------
 // Практична №9: клієнт для API (fetch). Варіант 3: тестові дані JSONPlaceholder.
@@ -292,13 +563,3 @@ async function loadData() {
 refreshButton.addEventListener('click', loadData);
 
 loadData();   // перше завантаження списку при відкритті сторінки
-
-// Виводимо кожен запис: дата і назва настрою.
-for (const record of moodRecords) {
-    console.log(record.date, '-', moodToLabel(record.mood));
-}
- 
-const averageMood = calcAverageMood(moodRecords);
-console.log(`Усього записів: ${moodRecords.length}`);
-console.log(`Середній настрій: ${averageMood.toFixed(2)} (${moodToLabel(Math.round(averageMood))})`);
-console.log(`Підсумок: ${classifyPeriod(averageMood)}`);
