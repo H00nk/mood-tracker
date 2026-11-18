@@ -198,6 +198,7 @@ form.addEventListener('submit', async event => {
         updateAverageMood(moodRecords);
         updateTotalCount(moodRecords);
         updateEmptyState();
+        updateChart();
     }
 
     form.reset();           // reset не викликає подій input, тому оновлюємо стан вручну
@@ -258,6 +259,277 @@ if (typeof Vue !== 'undefined') {
 } else {
     console.error('Vue не завантажився (перевірте з\'єднання з unpkg.com): історія записів показує статичні картки.');
 }
+
+// ==========================================================================
+// Практична №12 (варіант 3): Canvas-графік динаміки настрою.
+// Ламана лінія по останніх N записах з IndexedDB (практична №11): точка = запис,
+// висота точки = mood (1-5). Дані беруться з масиву moodRecords, а не з чисел у коді.
+// ==========================================================================
+
+const chartCanvas = document.querySelector('#mood-chart');
+const chartWrap = document.querySelector('#chart-wrap');
+const chartInfo = document.querySelector('#chart-info');
+const chartCountSelect = document.querySelector('#chart-count');
+const chartReplayButton = document.querySelector('#chart-replay');
+const chartCtx = chartCanvas.getContext('2d');
+
+const CHART_RATIO = 0.45;                   // висота = 45 % ширини
+const CHART_MIN_HEIGHT = 220;
+const CHART_DURATION = 900;                 // мс, тривалість «малювання» лінії
+const CHART_PADDING = { top: 20, right: 24, bottom: 36, left: 36 };
+const CHART_PLACEHOLDER = 'Наведіть курсор на точку, щоб побачити запис.';
+
+// Кольори беруться з CSS-змінних, щоб графік збігався з рештою інтерфейсу.
+function readChartColors() {
+    const css = getComputedStyle(document.documentElement);
+    const get = name => css.getPropertyValue(name).trim();
+    return {
+        line: get('--primary'),
+        grid: get('--lavender'),
+        text: get('--text-muted'),
+        surface: get('--bg-surface'),
+        moods: MOOD_KEYS.map(key => get(`--mood-${key}`)),   // індекс = mood - 1
+    };
+}
+
+// Стан графіка: розміри, обрані точки, поточний кадр анімації.
+let chartColors = null;
+let chartSize = { width: 640, height: 288 };
+let chartPoints = [];            // [{ record, x, y }] у координатах полотна (CSS-пікселі)
+let chartHover = -1;             // індекс точки під курсором
+let chartFrameId = null;         // id запиту requestAnimationFrame (для cancelAnimationFrame)
+let chartVisible = true;         // чи видно полотно на екрані
+let chartProgress = 1;           // 0..1, яка частина лінії вже намальована
+
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+// Останні N записів за датою (за однакової дати - за id). Початковий масив не змінюється.
+function getChartRecords(records, count) {
+    return [...records]
+        .sort((first, second) => first.date.localeCompare(second.date) || first.id - second.id)
+        .slice(-count);
+}
+
+// Підганяє розмір полотна під ширину контейнера й щільність пікселів екрана,
+// щоб лінії та текст не були розмитими. Малює в «CSS-пікселях» через setTransform.
+function resizeChartCanvas() {
+    const width = Math.max(260, Math.min(chartWrap.clientWidth || 640, 720));
+    const height = Math.max(CHART_MIN_HEIGHT, Math.round(width * CHART_RATIO));
+    const ratio = window.devicePixelRatio || 1;
+    chartCanvas.width = Math.round(width * ratio);
+    chartCanvas.height = Math.round(height * ratio);
+    chartCanvas.style.height = `${height}px`;
+    chartCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    chartSize = { width, height };
+}
+
+// Переводить значення настрою (1-5) у координату Y: 5 - угорі, 1 - унизу.
+function moodToY(mood) {
+    const { top, bottom } = CHART_PADDING;
+    const plotHeight = chartSize.height - top - bottom;
+    return top + (5 - mood) / 4 * plotHeight;
+}
+
+// Розкладає записи по X рівномірно від лівого до правого краю області графіка.
+function layoutChartPoints(records) {
+    const { left, right } = CHART_PADDING;
+    const plotWidth = chartSize.width - left - right;
+    return records.map((record, index) => ({
+        record,
+        x: records.length === 1 ? left + plotWidth / 2 : left + index / (records.length - 1) * plotWidth,
+        y: moodToY(record.mood),
+    }));
+}
+
+// Підпис дати на осі X у форматі дд.мм.
+const shortDate = isoDate => `${isoDate.slice(8, 10)}.${isoDate.slice(5, 7)}`;
+
+// Малює один кадр. progress (0..1) - яка частина лінії вже видима.
+// clearRect на початку обов'язковий, інакше нові кадри накладаються на старі.
+function drawChart(progress) {
+    const ctx = chartCtx;
+    const { width, height } = chartSize;
+    const { top, right, bottom, left } = CHART_PADDING;
+    ctx.clearRect(0, 0, width, height);
+
+    // 1. Сітка й підписи осі Y (рівні 1-5)
+    ctx.font = '12px Verdana, Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'right';
+    ctx.lineWidth = 1;
+    for (let level = 1; level <= 5; level++) {
+        const y = Math.round(moodToY(level)) + 0.5;
+        ctx.strokeStyle = chartColors.grid;
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(width - right, y);
+        ctx.stroke();
+        ctx.fillStyle = chartColors.text;
+        ctx.fillText(String(level), left - 8, y);
+    }
+
+    // 2. Порожній стан: немає записів - пояснення замість графіка
+    if (chartPoints.length === 0) {
+        ctx.fillStyle = chartColors.text;
+        ctx.textAlign = 'center';
+        ctx.fillText('Записів ще немає - графік з’явиться після першого запису', width / 2, height / 2);
+        return;
+    }
+
+    // 3. Підписи дат на осі X (не частіше, ніж кожні ~48 px)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = chartColors.text;
+    const step = Math.max(1, Math.ceil(48 / ((width - left - right) / Math.max(1, chartPoints.length - 1))));
+    chartPoints.forEach((point, index) => {
+        if (index % step === 0 || index === chartPoints.length - 1) {
+            ctx.fillText(shortDate(point.record.date), point.x, height - bottom + 10);
+        }
+    });
+
+    // 4. Ламана лінія: цілі відрізки + частина поточного відрізка за progress
+    const reveal = progress * (chartPoints.length - 1);        // «довжина» лінії в відрізках
+    ctx.save();
+    ctx.strokeStyle = chartColors.line;
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(chartPoints[0].x, chartPoints[0].y);
+    for (let i = 1; i < chartPoints.length; i++) {
+        const from = chartPoints[i - 1];
+        const to = chartPoints[i];
+        const part = Math.min(1, reveal - (i - 1));            // яка частина відрізка видима
+        if (part <= 0) break;
+        ctx.lineTo(from.x + (to.x - from.x) * part, from.y + (to.y - from.y) * part);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // 5. Точки кольором рівня настрою; з'являються, коли лінія до них дійшла
+    chartPoints.forEach((point, index) => {
+        if (index > reveal + 1e-9) return;
+        const radius = index === chartHover ? 8 : 6;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = chartColors.moods[point.record.mood - 1] || chartColors.line;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = chartColors.surface;
+        ctx.stroke();
+    });
+}
+
+// Цикл анімації: на кожному кадрі рахуємо progress за часом, перемальовуємо й,
+// якщо лінія ще не добігла кінця, просимо наступний кадр у браузера.
+function animateChart() {
+    cancelAnimationFrame(chartFrameId);            // не запускаємо два цикли одночасно
+    chartFrameId = null;
+    if (prefersReducedMotion.matches || !chartVisible || chartPoints.length < 2) {
+        chartProgress = 1;
+        drawChart(1);                              // без анімації: одразу готовий кадр
+        return;
+    }
+    const startTime = performance.now();
+    function frame(now) {
+        const t = Math.min(1, (now - startTime) / CHART_DURATION);
+        chartProgress = 1 - Math.pow(1 - t, 3);    // easeOutCubic: швидкий старт, плавне гальмування
+        drawChart(chartProgress);
+        chartFrameId = t < 1 ? requestAnimationFrame(frame) : null;
+    }
+    chartFrameId = requestAnimationFrame(frame);
+}
+
+// Підпис для скрінрідерів: що показано на графіку.
+function describeChart() {
+    if (chartPoints.length === 0) {
+        return 'Графік динаміки настрою: записів ще немає';
+    }
+    const items = chartPoints.map(p => `${formatDate(p.record.date)} - ${moodToLabel(p.record.mood)}`);
+    return `Графік динаміки настрою за останні ${chartPoints.length} записів: ${items.join('; ')}`;
+}
+
+// Головна функція: бере поточні дані, будує точки й запускає анімацію.
+// Викликається після кожної зміни даних (refreshList, додавання в режимі пам'яті).
+function updateChart() {
+    if (!chartColors) chartColors = readChartColors();
+    resizeChartCanvas();
+    const count = Number(chartCountSelect.value);
+    chartPoints = layoutChartPoints(getChartRecords(moodRecords, count));
+    chartHover = -1;
+    chartInfo.textContent = CHART_PLACEHOLDER;
+    chartCanvas.setAttribute('aria-label', describeChart());
+    animateChart();
+}
+
+// Миша / дотик: знаходимо найближчу точку (до 20 px), підсвічуємо й показуємо запис.
+// Під час анімації не втручаємось - кадр однаково перемальовується.
+chartCanvas.addEventListener('pointermove', event => {
+    if (chartFrameId !== null || chartPoints.length === 0) return;
+    const rect = chartCanvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    let nearest = -1;
+    let best = 20;
+    chartPoints.forEach((point, index) => {
+        const distance = Math.hypot(point.x - x, point.y - y);
+        if (distance < best) {
+            best = distance;
+            nearest = index;
+        }
+    });
+    if (nearest === chartHover) return;
+    chartHover = nearest;
+    if (nearest === -1) {
+        chartInfo.textContent = CHART_PLACEHOLDER;
+    } else {
+        const { record } = chartPoints[nearest];
+        chartInfo.textContent = `${formatDate(record.date)}: ${record.mood} - ${moodToLabel(record.mood)}`
+            + (record.note ? `. ${record.note}` : '');
+    }
+    drawChart(1);
+});
+
+chartCanvas.addEventListener('pointerleave', () => {
+    if (chartHover === -1) return;
+    chartHover = -1;
+    chartInfo.textContent = CHART_PLACEHOLDER;
+    if (chartFrameId === null) drawChart(1);
+});
+
+// Керування: вибір N перебудовує графік, кнопка програє анімацію ще раз.
+chartCountSelect.addEventListener('change', updateChart);
+chartReplayButton.addEventListener('click', animateChart);
+
+// Коректне завершення: коли графік поза екраном, цикл зупиняється (cancelAnimationFrame),
+// а коли повертається в поле зору - малюється готовий кадр. Вкладка у фоні
+// браузер призупиняє сам, requestAnimationFrame там не викликається.
+if ('IntersectionObserver' in window) {
+    new IntersectionObserver(entries => {
+        chartVisible = entries[0].isIntersecting;
+        if (!chartVisible) {
+            cancelAnimationFrame(chartFrameId);
+            chartFrameId = null;
+        } else if (chartFrameId === null) {
+            drawChart(1);
+        }
+    }).observe(chartCanvas);
+}
+
+// Зміна ширини вікна: перераховуємо розміри й малюємо готовий кадр без анімації.
+let chartResizeTimer = null;
+window.addEventListener('resize', () => {
+    clearTimeout(chartResizeTimer);
+    chartResizeTimer = setTimeout(() => {
+        if (chartColors === null) return;
+        cancelAnimationFrame(chartFrameId);
+        chartFrameId = null;
+        resizeChartCanvas();
+        chartPoints = layoutChartPoints(getChartRecords(moodRecords, Number(chartCountSelect.value)));
+        drawChart(1);
+    }, 150);
+});
+
 
 // ---------------------------------------------------------------------------
 // Практична №11: локальні сховища даних. Варіант 3: IndexedDB, база MoodDB, сховище
@@ -453,6 +725,7 @@ async function refreshList() {
     updateAverageMood(moodRecords);
     updateTotalCount(moodRecords);
     updateEmptyState();
+    updateChart();
 }
 
 // Підсумок у консоль (практична №6): викликається один раз, коли дані завантажено.
@@ -494,6 +767,7 @@ async function initStorage() {
         updateAverageMood(moodRecords);
         updateTotalCount(moodRecords);
         updateEmptyState();
+        updateChart();
     }
     logSummary(moodRecords);
 }

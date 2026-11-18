@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="css/style.css">
     <!-- Vue 3, глобальна збірка з CDN (практична 10); має стояти перед js/app.js -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js" defer></script>
-    <script src="js/app.stage1-localstorage.js" defer></script>
+    <script src="js/app.js" defer></script>
 </head>
 
 <body>
@@ -83,6 +83,30 @@
 
         </div>
 
+        </section>
+
+        <section>
+            <h2>Динаміка настрою</h2>
+
+            <p class="section-hint">Лінійний графік за останніми записами з бази: по осі Y - настрій від 1 до 5, по осі X - дата запису.</p>
+
+            <div class="chart-controls">
+                <label for="chart-count">Показати записів:</label>
+                <select id="chart-count" name="chart-count">
+                    <option value="5">5</option>
+                    <option value="7" selected>7</option>
+                    <option value="10">10</option>
+                </select>
+                <button type="button" id="chart-replay">Програти знову</button>
+            </div>
+
+            <div class="chart-wrap" id="chart-wrap">
+                <canvas id="mood-chart" width="640" height="288" role="img"
+                        aria-label="Графік динаміки настрою">
+                    Графік динаміки настрою. Ваш браузер не підтримує елемент canvas.
+                </canvas>
+            </div>
+            <p class="chart-info" id="chart-info" aria-live="polite">Наведіть курсор на точку, щоб побачити запис.</p>
         </section>
 
         <section>

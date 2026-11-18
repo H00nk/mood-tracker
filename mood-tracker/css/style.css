@@ -377,3 +377,71 @@ footer p {
     margin: 0 0 1rem;
     color: var(--text-muted);
 }
+
+
+/* ==========================================================================
+   Практична робота №12 - варіант 3: Canvas-графік настрою
+   ========================================================================== */
+
+.chart-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.chart-controls select {
+    font-family: inherit;
+    font-size: var(--fs-base);
+    min-height: 44px;
+    padding: 0.4rem 0.75rem;
+    color: var(--text);
+    background-color: var(--bg-surface);
+    border: 1px solid var(--primary);
+    border-radius: 12px;
+}
+
+.chart-controls select:focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+}
+
+#chart-replay {
+    font-family: inherit;
+    font-size: var(--fs-base);
+    min-height: 44px;
+    padding: 0.5rem 1.5rem;
+    color: #ffffff;
+    background-color: var(--primary);
+    border: 0;
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+#chart-replay:hover {
+    background-color: var(--primary-dark);
+}
+
+.chart-wrap {
+    width: 100%;
+    max-width: 720px;
+}
+
+/* розмір полотна виставляє js/app.js під ширину контейнера; тут - запасний варіант */
+#mood-chart {
+    display: block;
+    width: 100%;
+    height: auto;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--lavender);
+    border-radius: 16px;
+    touch-action: pan-y;
+}
+
+.chart-info {
+    min-height: 1.55em;
+    margin: 0.75rem 0 0;
+    color: var(--text-muted);
+    font-size: var(--fs-small);
+}
